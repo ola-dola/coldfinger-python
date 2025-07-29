@@ -1,34 +1,62 @@
 import os
 import sys
+import argparse
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from functions.get_files_info import schema_get_files_info
 
 load_dotenv()
-api_key = os.environ.get("GEMINI_API_KEY")
 
+api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
+
 def main():
-    verbose = False
+    # verbose = False
     
-    try:        
-        if len(sys.argv) < 2:
-            raise ValueError('No prompt passed')
-        user_prompt = sys.argv[1]
-        
-        if len(sys.argv) > 2 and sys.argv[2] == "--verbose":
-            verbose = True
-    except ValueError as e:
-        print(e)
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Poor man's Claude Code")
+    parser.add_argument("user_prompt", type=str, help="Prompt for the AI agent")
+    parser.add_argument("--verbose", action="store_true", help="How detailed the logs should be")
+    
+    args = parser.parse_args()
+    
+    system_prompt =system_prompt = """
+        You are a helpful AI coding agent.
+
+        When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
+
+        - List files and directories
+
+        All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
+    """
+    available_functions = types.Tool(
+        function_declarations=[
+            schema_get_files_info,
+        ]
+    )
+
+    # CLI arguments 
+    user_prompt = args.user_prompt
+    verbose = args.verbose
     
     messages = [types.Content(role="user", parts=[types.Part(text=user_prompt)])]
     
-    res = client.models.generate_content(model="gemini-2.0-flash-001", contents=messages)
-
+    try:
+        res = client.models.generate_content(
+            model="gemini-2.0-flash-001", 
+            contents=messages, 
+            config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt)
+        )
+    except Exception as e:
+        print(f"An error occured during the api call: {e}", file=sys.stderr)
+        sys.exit(1)
+        
+    if res.function_calls:
+        for function_call_part in res.function_calls:
+            print(f"Calling function: {function_call_part.name}({function_call_part.args})")
+        
     print(res.text)
-
     if verbose:
         print(f"User prompt: {user_prompt}")
         print(f"Prompt tokens: {res.usage_metadata.prompt_token_count}")
