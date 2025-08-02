@@ -1,7 +1,23 @@
 import os
 from config import MAX_CHARS
+from google.genai import types
+
+schema_get_file_content = types.FunctionDeclaration(
+    name="get_file_content",
+    description="Returns the content of the specified file as string. File is constrained to the working directory",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="Path to the file whose content is needed, relative to the working directory.",
+            ),
+        },
+    ),
+)
 
 def get_file_content(working_directory, file_path):
+  print("gotya asss")
   abs_working_directory = os.path.abspath(working_directory)
   abs_target_filepath = os.path.abspath(os.path.join(abs_working_directory, file_path))
   
