@@ -6,6 +6,7 @@ from google import genai
 from google.genai import types
 from call_function import available_functions, call_function
 from prompts import system_prompt
+from config import MAX_ITERS
 
 load_dotenv()
 
@@ -26,6 +27,11 @@ def generate_content(client, messages, verbose):
     if verbose:
         print(f"Prompt tokens: {res.usage_metadata.prompt_token_count}")
         print(f"Response tokens: {res.usage_metadata.candidates_token_count}")
+    
+    if res.candidates:
+        for candidate in res.candidates:
+            function_call_content = candidate.content
+            messages.append(function_call_content)
         
     if not res.function_calls:
         return res.text 
@@ -43,6 +49,8 @@ def generate_content(client, messages, verbose):
 
     if not function_responses:
         raise Exception("no function responses generated, exiting.")
+
+    messages.append(types.Content(role="user", parts=function_responses))
 
 
 def main():
@@ -62,7 +70,22 @@ def main():
     messages = [types.Content(role="user", parts=[types.Part(text=user_prompt)])]
     
     generate_content(client, messages, verbose)
-    
+
+    iters = 0
+    while True:
+        iters += 1
+        if iters > MAX_ITERS:
+            print(f"Maximum iterations ({MAX_ITERS}) reached.")
+            sys.exit(1)
+
+        try:
+            final_response = generate_content(client, messages, verbose)
+            if final_response:
+                print("Final response:")
+                print(final_response)
+                break
+        except Exception as e:
+            print(f"Error in generate_content: {e}")    
 
 if __name__ == "__main__":
     main()
