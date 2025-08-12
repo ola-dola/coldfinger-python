@@ -4,20 +4,65 @@ import argparse
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from functions.get_files_info import schema_get_files_info
-from functions.get_file_content import schema_get_file_content
-from functions.write_file import schema_write_file
-from functions.run_python import schema_run_python
+from functions.get_files_info import schema_get_files_info, get_files_info
+from functions.get_file_content import schema_get_file_content, get_file_content
+from functions.write_file import schema_write_file, write_file
+from functions.run_python import schema_run_python, run_python_file
 
 load_dotenv()
 
 api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
+def call_function(function_call_part: types.FunctionCall, verbose=False):
+    working_dir = "./calculator"
+    function_name = function_call_part.name
+    function_args = function_call_part.args or {}
+    function_result = None
+    
+    if function_name is None:
+        raise TypeError("Model returned a function with no name")
+
+    if verbose:
+        print(f"Calling function: {function_name}({function_args})")
+    else:
+        print(f"Calling function: {function_name}")
+        
+    available_functions_dict = {
+        "get_files_info": get_files_info,
+        "get_file_content": get_file_content,
+        "write_file": write_file,
+        "run_python_file": run_python_file,
+    }
+    
+    if function_name not in available_functions_dict:
+        return types.Content(
+            role="tool",
+            parts=[
+                types.Part.from_function_response(
+                    name=function_name,
+                    response={"error": f"Unknown function: {function_name}"},
+                )
+            ],
+        )
+        
+    
+    function_result = available_functions_dict[function_name](working_dir, **function_args)
+   
+    
+    return types.Content(
+        role="tool",
+        parts=[
+            types.Part.from_function_response(
+                name=function_name,
+                response={"result": function_result},
+            )
+    ],
+)
+    
+
 
 def main():
-    # verbose = False
-    
     parser = argparse.ArgumentParser(description="Poor man's Claude Code")
     parser.add_argument("user_prompt", type=str, help="Prompt for the AI agent")
     parser.add_argument("--verbose", action="store_true", help="How detailed the logs should be")
@@ -63,7 +108,13 @@ def main():
         
     if res.function_calls:
         for function_call_part in res.function_calls:
-            print(f"Calling function: {function_call_part.name}({function_call_part.args})")
+            function_call_result = call_function(function_call_part, verbose)
+            
+            if (not function_call_result.parts or not function_call_result.parts[0].function_response.response):
+                raise Exception("Empty function call result")
+            
+            print(f"-> {function_call_result.parts[0].function_response.response}")
+            
         
     print(res.text)
     if verbose:
