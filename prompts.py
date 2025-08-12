@@ -9,4 +9,5 @@ system_prompt = """
         - Write or overwrite files
 
         All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
+        You should always read the files available first, and where necessary, the content of those necessary before proceeding to attempt a fix.
     """
